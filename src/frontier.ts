@@ -39,3 +39,30 @@ export async function claimUrl(workerId: string) {
     client.release();
   }
 }
+
+export async function markFetched(id: string, httpStatus: number) {
+  await pool.query(
+    `
+      UPDATE frontier
+      SET
+        status = 'fetched',
+        http_status = $1,
+        updated_at = NOW()
+      WHERE id = $2
+    `,
+    [httpStatus, id],
+  );
+}
+
+export async function markFailed(id: string, error: string) {
+  await pool.query(
+    `
+    UPDATE frontier
+    SET
+      status = 'failed',
+      error = $1,
+      updated_at = NOW()
+    WHERE id = $2;`,
+    [error, id],
+  );
+}
