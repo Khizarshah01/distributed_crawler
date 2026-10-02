@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { pool } from './db.js';
 import { claimUrl, markFetched, markFailed } from './frontier.js';
 import { fetchPage } from './fetcher.js';
+import { enqueueUrl } from './frontier.js';
+import { extractLinks } from './parser.js';
 
 async function main() {
   const job = await claimUrl('worker-1');
@@ -19,6 +21,18 @@ async function main() {
     console.log('HTTP status:', result.status);
     console.log('Content type:', result.contentType);
     console.log('HTML received:', result.html?.length ?? 0, 'bytes');
+
+    if (result.html) {
+      const links = extractLinks(result.html, job.url);
+
+      console.log('Links discovered:', links.length);
+
+      for (const link of links) {
+        await enqueueUrl(link, job.depth + 1);
+      }
+
+      console.log('Links enqueued:', links.length);
+    }
 
     await markFetched(job.id, result.status);
   } catch (error) {

@@ -66,3 +66,14 @@ export async function markFailed(id: string, error: string) {
     [error, id],
   );
 }
+
+export async function enqueueUrl(url: string, depth: number) {
+  await pool.query(
+    `
+      INSERT INTO frontier (url, depth)
+      VALUES ($1, $2)
+      ON CONFLICT (url) DO NOTHING
+    `,
+    [url, depth],
+  );
+}
