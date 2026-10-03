@@ -4,11 +4,16 @@ import {
   markFetched,
   markFailed,
   enqueueUrl,
+  recoverExpiredLeases,
 } from "./frontier.js";
 import { fetchPage } from "./fetcher.js";
 import { extractLinks } from "./parser.js";
 
 const MAX_DEPTH = 2;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function main() {
   const workerId = process.argv[2] ?? `worker-${process.pid}`;
@@ -17,11 +22,25 @@ async function main() {
   console.log(`starting worker ${workerId}`);
 
   try {
+    let lastRecovery = 0;
+
     while (true) {
+      if (Date.now() - lastRecovery >= 5000) {
+        const recovered = await recoverExpiredLeases();
+
+        if (recovered > 0) {
+          console.log(
+            `${workerId}: recovered ${recovered} expired lease(s)`,
+          );
+        }
+
+        lastRecovery = Date.now();
+      }
+
       const job = await claimUrl(workerId);
       if (!job) {
-        console.log(`no queued urls`);
-        break;
+        await sleep(1000);
+        continue;
       }
 
       console.log(`${workerId} processing ${job.url}`);
@@ -43,18 +62,17 @@ async function main() {
           console.log(`${workerId}: enqueued ${links.length} links`);
         }
 
-        await markFetched(job.id, result.status);
+        await markFetched(job.id, result.status, workerId);
         processed++;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        await markFailed(job.id, message);
+        await markFailed(job.id, message, workerId);
         console.error(`${workerId}: failed ${job.url}: ${message}`);
       }
     }
   } finally {
     await pool.end();
   }
-      console.log(`${workerId}: processed ${processed} urls`);
 }
 
 main().catch((error) => {

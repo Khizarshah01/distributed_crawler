@@ -28,7 +28,7 @@ export async function claimUrl(workerId: string) {
       `,
       [workerId],
     );
-// // claim one queued URL without waiting on rows another worker has locked
+    // // claim one queued URL without waiting on rows another worker has locked
     await client.query('COMMIT');
 
     return result.rows[0] ?? null;
@@ -40,30 +40,47 @@ export async function claimUrl(workerId: string) {
   }
 }
 
-export async function markFetched(id: string, httpStatus: number) {
+export async function markFetched(
+  id: string,
+  httpStatus: number,
+  workerId: string,
+) {
   await pool.query(
     `
       UPDATE frontier
       SET
         status = 'fetched',
         http_status = $1,
+        locked_by = NULL,
+        locked_at = NULL,
         updated_at = NOW()
       WHERE id = $2
+        AND status = 'processing'
+        AND locked_by = $3
     `,
-    [httpStatus, id],
+    [httpStatus, id, workerId],
   );
 }
 
-export async function markFailed(id: string, error: string) {
+export async function markFailed(
+  id: string,
+  error: string,
+  workerId: string,
+) {
   await pool.query(
     `
-    UPDATE frontier
-    SET
-      status = 'failed',
-      error = $1,
-      updated_at = NOW()
-    WHERE id = $2;`,
-    [error, id],
+      UPDATE frontier
+      SET
+        status = 'failed',
+        error = $1,
+        locked_by = NULL,
+        locked_at = NULL,
+        updated_at = NOW()
+      WHERE id = $2
+        AND status = 'processing'
+        AND locked_by = $3
+    `,
+    [error, id, workerId],
   );
 }
 
@@ -76,4 +93,20 @@ export async function enqueueUrl(url: string, depth: number) {
     `,
     [url, depth],
   );
+}
+
+// check is there any processing url stuck more then 30s if yes then put the status queued and lock free
+export async function recoverExpiredLeases() {
+  const result = await pool.query(`
+    UPDATE frontier
+    SET
+      status = 'queued',
+      locked_by = NULL,
+      locked_at = NULL,
+      updated_at = NOW()
+    WHERE status = 'processing'
+      AND locked_at < NOW() - INTERVAL '15 seconds'
+  `);
+
+  return result.rowCount ?? 0;
 }
