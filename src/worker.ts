@@ -3,11 +3,13 @@ import {
   claimUrl,
   markFetched,
   markFailed,
+  markBlocked,
   enqueueUrl,
   recoverExpiredLeases,
-} from "./frontier.js";
+} from './frontier.js';
 import { fetchPage } from "./fetcher.js";
 import { extractLinks } from "./parser.js";
+import { canCrawl } from "./robots.js";
 
 const MAX_DEPTH = 2;
 
@@ -46,6 +48,15 @@ async function main() {
       console.log(`${workerId} processing ${job.url}`);
 
       try {
+        const allowed = await canCrawl(job.url);
+
+        if (!allowed) {
+          console.log(`${workerId}: blocked by robots.txt ${job.url}`);
+
+          await markBlocked(job.id, workerId);
+          continue;
+        }
+
         const result = await fetchPage(job.url);
 
         console.log(

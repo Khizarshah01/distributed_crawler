@@ -34,12 +34,12 @@ async function main() {
       console.log('Links enqueued:', links.length);
     }
 
-    await markFetched(job.id, result.status);
+    await markFetched(job.id, result.status, 'worker-1');
   } catch (error) {
     const message =
       error instanceof Error ? error.message : String(error);
 
-    await markFailed(job.id, message);
+    await markFailed(job.id, message, 'worker-1');
 
     console.error('Fetch failed:', message);
   } finally {
