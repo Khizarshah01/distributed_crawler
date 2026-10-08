@@ -10,8 +10,9 @@ import {
 import { fetchPage } from "./fetcher.js";
 import { extractLinks } from "./parser.js";
 import { canCrawl } from "./robots.js";
+import { getDnsStats } from './dns.js';
 
-const MAX_DEPTH = 2;
+const MAX_DEPTH = Number(process.env.MAX_DEPTH ?? 2);
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -58,6 +59,7 @@ async function main() {
         }
 
         const result = await fetchPage(job.url);
+
 
         console.log(
           `${workerId}: ${result.status} ${job.url} (${result.html?.length ?? 0} bytes)`,
